@@ -1,8 +1,10 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 const bcrypt = require('bcryptjs');
+const { PrismaClient } = require('@prisma/client');
 const Redis = require('ioredis');
-const redis = new Redis(); // Connects to localhost:6379 by default
+
+const prisma = new PrismaClient();
+const redis = new Redis();
 
 // @desc Register a new user
 // @route POST /api/register
@@ -14,21 +16,28 @@ exports.registerUser = async (req, res) => {
   }
 
   try {
-    const existingUser = await User.findOne({ email });
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return res.status(409).json({ message: "User already exists" });
     }
 
-    const newUser = await User.create({
-      name,
-      email,
-      password // Will be hashed in model via pre-save
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+      }
     });
 
     res.status(201).json({
       message: "User registered successfully",
       user: {
-        id: newUser._id,
+        id: newUser.id,
         name: newUser.name,
         email: newUser.email
       }
@@ -50,7 +59,7 @@ exports.loginUser = async (req, res) => {
   }
 
   try {
-    const user = await User.findOne({ email });
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
@@ -60,38 +69,40 @@ exports.loginUser = async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    // ✅ Access Token (15 mins)
     const accessToken = jwt.sign(
-      { userId: user._id },
+      { userId: user.id },
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: '15m' }
     );
 
-    // ✅ Refresh Token (7 days)
     const refreshToken = jwt.sign(
-      { userId: user._id },
+      { userId: user.id },
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: '7d' }
     );
 
-    // ✅ Store refresh token in DB
-    user.refreshTokens.push(refreshToken);
-    await user.save();
+    // Store refresh token (append to array if needed)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        refreshTokens: {
+          push: refreshToken
+        }
+      }
+    });
 
-    // ✅ Set refresh token in httpOnly cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // ✅ Return access token + user info
     res.status(200).json({
       message: "Login successful",
       token: accessToken,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email
       }
@@ -115,23 +126,25 @@ exports.logoutUser = async (req, res) => {
       return res.status(400).json({ message: 'Tokens missing' });
     }
 
-    // ✅ Decode token to get expiry time
     const decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
-    const expiry = decoded.exp * 1000 - Date.now(); // ms TTL
+    const expiry = decoded.exp * 1000 - Date.now();
 
-    // ✅ Blacklist access token in Redis with TTL
     await redis.set(`bl_${accessToken}`, true, 'PX', expiry);
 
-    // ✅ Clear refresh token cookie
     res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
     });
 
-    // ✅ Remove refresh token from user's DB record
-    await User.findByIdAndUpdate(decoded.userId, {
-      $pull: { refreshTokens: refreshToken }
+    // Remove refresh token from DB
+    await prisma.user.update({
+      where: { id: decoded.userId },
+      data: {
+        refreshTokens: {
+          set: []
+        }
+      }
     });
 
     res.status(200).json({ message: 'Logout successful' });
