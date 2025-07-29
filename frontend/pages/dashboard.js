@@ -62,7 +62,7 @@ export default function Dashboard({ token, setToken }) {
     }}>
       <h1>Welcome to the Dashboard ✅</h1>
       {userId && <h2>User ID: {userId}</h2>}
-      <p>You are successfully authenticated using token.</p>
+      <p>You are successfully authenticated.</p>
 
       <button
         style={{

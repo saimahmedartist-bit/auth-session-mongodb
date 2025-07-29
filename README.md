@@ -1,82 +1,138 @@
-# 🔐 Auth App (Express + PostgreSQL + Prisma + JWT + Redis)
+# 🔐 Auth Session Relations
 
-This is a full-stack authentication system built with **Express.js** backend, **PostgreSQL** database using **Prisma ORM**, and secure authentication via **JWT** and **Redis** for token blacklisting.
-
----
-
-## 🚀 Features
-
-- ✅ Register and login with secure password hashing (`bcryptjs`)
-- ✅ JWT-based access & refresh tokens
-- ✅ Refresh token stored in **httpOnly** cookie
-- ✅ Redis integration for access token blacklisting (secure logout)
-- ✅ PostgreSQL database integration using Prisma
-- ✅ Role support (admin/user)
-- ✅ Environment variables securely stored in `.env`
+A simple and secure authentication system built with **Next.js (frontend)** and **Express + Prisma + PostgreSQL (backend)**. It includes user registration, login, JWT access/refresh tokens, and proper token revocation using PostgreSQL relationships.
 
 ---
 
-## 🛠️ Technologies
+## ✅ Features
 
-- **Node.js** + **Express**
-- **PostgreSQL** (local)
-- **Prisma ORM**
-- **JWT** (Access + Refresh Tokens)
-- **Redis** (via `ioredis`)
-- **bcryptjs** (password hashing)
-- **cookie-parser** (secure cookie handling)
-- **dotenv** (environment config)
+- Register & Login with hashed passwords using `bcryptjs`
+- JWT-based **access** & **refresh** token system
+- Secure cookie storage (`httpOnly`) for refresh tokens
+- PostgreSQL database using Prisma ORM
+- Token revocation on logout
+- Fully protected routes
+- Automatic token refresh via Axios interceptors
+- Responsive Next.js frontend with protected dashboard
 
 ---
 
-## 📦 Installation
+## 🛠 Tech Stack
 
-```bash
-git clone https://github.com/saimahmedartist-bit/auth-app-postgres.git
-cd auth-app-postgres/backend
-npm install
-⚙️ Environment Setup
-Create a .env file in the backend/ folder:
+| Layer       | Tech                          |
+|-------------|-------------------------------|
+| Frontend    | Next.js + Axios               |
+| Backend     | Node.js + Express             |
+| Auth        | JWT + bcryptjs                |
+| Database    | PostgreSQL + Prisma ORM       |
+| Storage     | Refresh tokens in DB + cookie |
+| UI State    | React useState                |
 
-ini
+---
+
+## 📁 Folder Structure
+
+auth-session-relations/
+├── backend/
+│ ├── controllers/
+│ ├── routes/
+│ ├── prisma/
+│ │ └── schema.prisma
+│ ├── middleware/
+│ ├── .env
+│ └── server.js
+├── frontend/
+│ ├── pages/
+│ │ ├── login.js
+│ │ └── dashboard.js
+│ └── _app.js
+├── screenshots/
+├── .gitignore
+└── README.md
+
+yaml
 Copy
 Edit
+
+---
+
+## 🔄 API Endpoints
+
+| Method | Endpoint            | Description                  |
+|--------|---------------------|------------------------------|
+| POST   | `/api/register`     | Register new user            |
+| POST   | `/api/login`        | Authenticate & get tokens    |
+| POST   | `/api/logout`       | Revoke refresh token         |
+| POST   | `/api/refresh-token`| Issue new access token       |
+| GET    | `/api/protected`    | Test protected route         |
+
+---
+
+## 🧪 How to Test
+
+1. **Register via Postman**  
+   `POST http://localhost:5000/api/register`
+
+2. **Login via Postman**  
+   `POST http://localhost:5000/api/login`  
+   - Receives access token + sets refresh token as httpOnly cookie
+
+3. **Access Protected Route**  
+   `GET http://localhost:5000/api/protected`  
+   - Must send `Authorization: Bearer <access_token>`
+
+4. **Logout**  
+   `POST http://localhost:5000/api/logout`  
+   - Revokes refresh token in DB
+
+5. **Token Refresh Auto Works**  
+   - Try hitting protected route after access token expiry. It will auto-refresh.
+
+---
+
+## 🖼️ Screenshots
+
+All screenshots are available inside the `/screenshots/` folder:
+
+- `localhost` running confirmation  
+- `terminal-frontend.png`  
+- `terminal-backend.png`  
+- `Postman-Login.png`  
+- `Postman-Register.png`  
+- `pg-myadmin.png`
+
+---
+
+## ⚙️ Environment Variables (`.env`)
+
+```env
 PORT=5000
-DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/yourdbname?schema=public"
-ACCESS_TOKEN_SECRET=your_access_token_secret
-REFRESH_TOKEN_SECRET=your_refresh_token_secret
-✅ Replace yourpassword, yourdbname, and secrets accordingly.
 
-🧪 Prisma Setup
+# JWT secrets
+ACCESS_TOKEN_SECRET=your_access_secret
+REFRESH_TOKEN_SECRET=your_refresh_secret
+
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/authdb?schema=public"
+📦 Run the App
+📁 Backend
 bash
 Copy
 Edit
-npx prisma init          # only once
-npx prisma migrate dev   # after schema updates
-npx prisma studio        # to view/manage data
-▶️ Run the Server
+cd backend
+npm install
+npx prisma migrate dev --name init
+npm start
+🖥️ Frontend
 bash
 Copy
 Edit
-node server.js
-✅ API Endpoints
-Method	Route	Description
-POST	/api/register	Register new user
-POST	/api/login	Login & get tokens
-POST	/api/logout	Logout user (clear cookie + blacklist)
-
-🔐 Security Highlights
-Passwords are hashed using bcryptjs
-
-Access tokens are short-lived (15 min)
-
-Refresh tokens are long-lived (7 days)
-
-Refresh tokens stored in httpOnly cookie
-
-Access tokens are blacklisted on logout using Redis
-
-👨‍💻 Author
+cd frontend
+npm install
+npm run dev
+🧠 Author
 Saim Ahmed
+Web Development Intern
 GitHub
-Built with ❤️ by a passionate web dev intern.
+
+

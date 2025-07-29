@@ -1,22 +1,28 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
+const cookieParser = require('cookie-parser');
 
+// ✅ Middleware
+const verifyAccessToken = require('../middleware/verifyAccessToken');
+
+// ✅ Controllers
 const {
   registerUser,
   loginUser,
-  logoutUser // ✅ Import logout controller
+  logoutUser,
+  refreshAccessToken // ✅ NEW import
 } = require('../controllers/authController');
 
-const verifyAccessToken = require('../middleware/verifyAccessToken');
+// ✅ Routes
 
-// ✅ Register new user
+// Register a new user
 router.post('/register', registerUser);
 
-// ✅ Login existing user and issue tokens
+// Login existing user
 router.post('/login', loginUser);
 
-// ✅ Access protected route (requires valid access token)
+// Access protected route
 router.get('/protected', verifyAccessToken, (req, res) => {
   res.json({
     message: 'You are authenticated!',
@@ -24,25 +30,10 @@ router.get('/protected', verifyAccessToken, (req, res) => {
   });
 });
 
-// ✅ Refresh access token using refresh token cookie
-router.post('/refresh-token', (req, res) => {
-  const token = req.cookies.refreshToken;
-  if (!token) return res.sendStatus(401); // No token, Unauthorized
+// ✅ Refresh access token (uses controller logic and DB validation)
+router.post('/refresh-token', refreshAccessToken);
 
-  jwt.verify(token, process.env.REFRESH_TOKEN_SECRET, (err, decoded) => {
-    if (err) return res.sendStatus(403); // Invalid token, Forbidden
-
-    const newAccessToken = jwt.sign(
-      { userId: decoded.userId },
-      process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: '15m' }
-    );
-
-    res.json({ token: newAccessToken });
-  });
-});
-
-// ✅ Proper logout: calls logoutUser controller
+// ✅ Logout route (blacklists access token and revokes refresh token)
 router.post('/logout', logoutUser);
 
 module.exports = router;

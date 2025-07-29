@@ -16,22 +16,19 @@ exports.registerUser = async (req, res) => {
   }
 
   try {
-    // Check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return res.status(409).json({ message: "User already exists" });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
     const newUser = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
-      }
+      },
     });
 
     res.status(201).json({
@@ -39,17 +36,16 @@ exports.registerUser = async (req, res) => {
       user: {
         id: newUser.id,
         name: newUser.name,
-        email: newUser.email
-      }
+        email: newUser.email,
+      },
     });
-
   } catch (error) {
     console.error("Register error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// @desc Login existing user
+// @desc Login user
 // @route POST /api/login
 exports.loginUser = async (req, res) => {
   const { email, password } = req.body;
@@ -61,12 +57,12 @@ exports.loginUser = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const accessToken = jwt.sign(
@@ -81,14 +77,13 @@ exports.loginUser = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Store refresh token (append to array if needed)
-    await prisma.user.update({
-      where: { id: user.id },
+    // Save refresh token to DB
+    await prisma.refreshToken.create({
       data: {
-        refreshTokens: {
-          push: refreshToken
-        }
-      }
+        token: refreshToken,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user: { connect: { id: user.id } },
+      },
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -104,13 +99,52 @@ exports.loginUser = async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
-        email: user.email
-      }
+        email: user.email,
+      },
     });
-
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// @desc Refresh access token
+// @route POST /api/refresh-token
+exports.refreshAccessToken = async (req, res) => {
+  const token = req.cookies.refreshToken;
+
+  if (!token) {
+    return res.status(401).json({ message: 'Refresh token missing' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+
+    const dbToken = await prisma.refreshToken.findFirst({
+      where: {
+        token,
+        revoked: false,
+        userId: decoded.userId,
+        expires_at: {
+          gt: new Date(),
+        },
+      },
+    });
+
+    if (!dbToken) {
+      return res.status(403).json({ message: 'Refresh token is invalid or expired' });
+    }
+
+    const accessToken = jwt.sign(
+      { userId: decoded.userId },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    res.status(200).json({ accessToken });
+  } catch (err) {
+    console.error('Refresh error:', err.message);
+    res.status(403).json({ message: 'Invalid refresh token' });
   }
 };
 
@@ -137,18 +171,17 @@ exports.logoutUser = async (req, res) => {
       sameSite: 'strict',
     });
 
-    // Remove refresh token from DB
-    await prisma.user.update({
-      where: { id: decoded.userId },
+    // Mark refresh token as revoked
+    await prisma.refreshToken.updateMany({
+      where: {
+        token: refreshToken,
+      },
       data: {
-        refreshTokens: {
-          set: []
-        }
-      }
+        revoked: true,
+      },
     });
 
     res.status(200).json({ message: 'Logout successful' });
-
   } catch (err) {
     console.error('Logout error:', err.message);
     res.status(401).json({ message: 'Invalid token or session' });

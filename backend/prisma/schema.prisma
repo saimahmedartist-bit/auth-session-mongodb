@@ -1,4 +1,4 @@
-// backend/prisma/schema.prisma
+// prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -10,14 +10,24 @@ datasource db {
 }
 
 model User {
-  id             Int      @id @default(autoincrement())
+  id             Int             @id @default(autoincrement())
   name           String
-  email          String   @unique
+  email          String          @unique
   password       String
-  role           String   @default("user")
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  role           String          @default("user")
+  created_at     DateTime        @default(now())
+  updated_at     DateTime        @updatedAt
+  refreshTokens  RefreshToken[]
+}
 
-  // ✅ Add this line:
-  refreshTokens  String[] @default([])
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  expires_at DateTime
+  revoked    Boolean  @default(false)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+
+  @@index([userId])
+  @@index([token])
 }

@@ -2,25 +2,27 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const bodyParser = require('body-parser');
-const cookieParser = require('cookie-parser'); // ✅ Needed for refreshToken handling
-const authRoutes = require('./routes/authRoutes'); // ✅ Your authentication routes
+const cookieParser = require('cookie-parser'); // ✅ Needed for refresh token handling
+const authRoutes = require('./routes/authRoutes'); // ✅ Your route handlers
+const { PrismaClient } = require('@prisma/client');
 
 console.log("🟡 Starting server.js");
 
-dotenv.config();
+dotenv.config(); // ✅ Load environment variables
 console.log("✅ .env loaded");
 
+// Initialize Express app
 const app = express();
 
-// ✅ Middleware setup
+// ✅ Middleware configuration
 app.use(cors({
-  origin: 'http://localhost:3000', // Adjust based on frontend
-  credentials: true
+  origin: 'http://localhost:3000', // Replace with frontend domain in production
+  credentials: true // ✅ Allow cookies from frontend
 }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 
-// ✅ API routes
+// ✅ API route mounting
 app.use('/api', authRoutes);
 
 // ✅ Health check route
