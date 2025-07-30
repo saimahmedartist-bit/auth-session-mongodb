@@ -45,22 +45,32 @@ exports.registerUser = async (req, res) => {
   }
 };
 
-// @desc Login user
+// @desc Login user (Raw SQL)
 // @route POST /api/login
 exports.loginUser = async (req, res) => {
   const { email, password } = req.body;
+
+  console.log("🟢 Login attempt:", { email, password });
 
   if (!email || !password) {
     return res.status(400).json({ message: "Please enter email and password" });
   }
 
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    // ✅ FIXED: Table name is "User" with quotes
+    const userResult = await prisma.$queryRaw`SELECT * FROM "User" WHERE email = ${email}`;
+    console.log("🔍 Query result:", userResult);
+
+    const user = userResult[0];
+
     if (!user) {
+      console.log("❌ No user found for email:", email);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log("🔐 Password match:", isMatch);
+
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -77,12 +87,11 @@ exports.loginUser = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Save refresh token to DB
     await prisma.refreshToken.create({
       data: {
         token: refreshToken,
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        user: { connect: { id: user.id } },
+        userId: user.id,
       },
     });
 
@@ -102,8 +111,9 @@ exports.loginUser = async (req, res) => {
         email: user.email,
       },
     });
+
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("❌ Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -171,19 +181,44 @@ exports.logoutUser = async (req, res) => {
       sameSite: 'strict',
     });
 
-    // Mark refresh token as revoked
     await prisma.refreshToken.updateMany({
-      where: {
-        token: refreshToken,
-      },
-      data: {
-        revoked: true,
-      },
+      where: { token: refreshToken },
+      data: { revoked: true },
     });
 
     res.status(200).json({ message: 'Logout successful' });
   } catch (err) {
     console.error('Logout error:', err.message);
     res.status(401).json({ message: 'Invalid token or session' });
+  }
+};
+
+// @desc Get all users (admin-only) with pagination
+// @route GET /api/users?page=1&limit=10
+exports.getAllUsersPaginated = async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+
+  try {
+    // ✅ FIXED: Use quoted PascalCase table name "User"
+    const users = await prisma.$queryRaw`
+      SELECT id, name, email, role FROM "User"
+      ORDER BY created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    const countResult = await prisma.$queryRaw`SELECT COUNT(*) FROM "User"`;
+    const total = parseInt(countResult[0].count);
+
+    res.status(200).json({
+      users,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error("Fetch users error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };

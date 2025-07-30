@@ -5,13 +5,15 @@ const cookieParser = require('cookie-parser');
 
 // ✅ Middleware
 const verifyAccessToken = require('../middleware/verifyAccessToken');
+const checkAdmin = require('../middleware/checkAdmin'); // ✅ NEW middleware
 
 // ✅ Controllers
 const {
   registerUser,
   loginUser,
   logoutUser,
-  refreshAccessToken // ✅ NEW import
+  refreshAccessToken,
+  getAllUsersPaginated, // ✅ NEW controller function
 } = require('../controllers/authController');
 
 // ✅ Routes
@@ -22,18 +24,21 @@ router.post('/register', registerUser);
 // Login existing user
 router.post('/login', loginUser);
 
-// Access protected route
+// Protected route
 router.get('/protected', verifyAccessToken, (req, res) => {
   res.json({
     message: 'You are authenticated!',
-    userId: req.userId
+    userId: req.userId,
   });
 });
 
-// ✅ Refresh access token (uses controller logic and DB validation)
+// Refresh access token
 router.post('/refresh-token', refreshAccessToken);
 
-// ✅ Logout route (blacklists access token and revokes refresh token)
+// Logout
 router.post('/logout', logoutUser);
+
+// ✅ Admin-only paginated user listing route
+router.get('/users', verifyAccessToken, checkAdmin, getAllUsersPaginated);
 
 module.exports = router;
